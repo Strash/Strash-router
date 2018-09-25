@@ -1,6 +1,6 @@
-# Простой роутер
+# Strash Router — ростой роутер
 
-**Version 0.2.2-beta**
+**Version 0.3.0-beta**
 
 
 
@@ -21,7 +21,7 @@
 
 ### 1. Инициирование роутера
 ```javascript
-new Router([
+new STRouter([
   {
     path: '/',
     components: {

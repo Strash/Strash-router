@@ -1,11 +1,8 @@
-// ROUTER
-import Router from './router.js';
-
 // COMPONENTS
 import Menu from './components/menu.js';
 import Page from './components/page.js';
 
-window.router = new Router([
+window.router = new STRouter([
   {
     path: '/',
     components: {

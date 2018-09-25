@@ -14,7 +14,7 @@
  * 3.5 setting watcher onto browser history
  *
  */
-const Router = (() => {
+window.STRouter = (() => {
   class Router {
     constructor(routes = undefined) {
       this.routes = routes;
@@ -32,7 +32,7 @@ const Router = (() => {
     }
 
     get version () {
-      return '0.2.2-beta';
+      return '0.3.0-beta';
     }
 
     // геттер адресной строки
@@ -248,5 +248,3 @@ const Router = (() => {
 
   return Router;
 })();
-
-export default Router;
