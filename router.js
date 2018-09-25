@@ -32,7 +32,7 @@ const Router = (() => {
     }
 
     get version () {
-      return '0.2.0-beta';
+      return '0.2.1-beta';
     }
 
     // геттер адресной строки
