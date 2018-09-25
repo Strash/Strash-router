@@ -1,4 +1,4 @@
-# Strash Router — ростой роутер
+# Strash Router — простой роутер
 
 **Version 0.3.0-beta**
 
