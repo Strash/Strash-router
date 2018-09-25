@@ -1,6 +1,6 @@
 # Простой роутер
 
-**Version 0.2.1-beta**
+**Version 0.2.2-beta**
 
 
 
@@ -96,7 +96,7 @@ let Page = () => {
 * [getLocation](#getLocation)
 * [render](#render)
 * [version](#version)
-* [window.$routes](#window.$routes)
+* [window.$routes](#window.routes)
 
 
 
