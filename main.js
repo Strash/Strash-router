@@ -2,15 +2,14 @@
 import Router from './router.js';
 
 // COMPONENTS
-import Page from './components/page.js';
 import Menu from './components/menu.js';
+import Page from './components/page.js';
 
-const router = new Router([
+window.router = new Router([
   {
     path: '/',
     components: {
-      menu: Menu,
-      page: Page
+      menu: Menu
     }
   },
   {
@@ -20,14 +19,19 @@ const router = new Router([
       page: Page
     }
   },
+  {
+    path: '/projects',
+    components: {
+      menu: Menu,
+      page: Page
+    }
+  },
   // 404
   {
-    path: 'missingPage',
+    path: '*',
     components: {
       menu: Menu,
       page: Page
     }
   }
 ]);
-
-window.router = router;

@@ -23,6 +23,8 @@ const Router = (() => {
       this.componentNames = new Set();
       // this.vnode = [];
 
+      this.__setGlobalAliases();
+
       this.detectMountPlace();
       this._clickWatching();
       this._popWatching();
@@ -30,7 +32,7 @@ const Router = (() => {
     }
 
     get version () {
-      return '0.1.0-beta';
+      return '0.2.0-beta';
     }
 
     // геттер адресной строки
@@ -44,20 +46,14 @@ const Router = (() => {
       };
     }
 
-    // proxy to path
-    get path () {
-      return this.getLocation.path;
+    __setGlobalAliases () {
+      window.$routes = this.routes;
     }
 
-    // proxy to origin
-    get origin () {
-      return this.getLocation.origin;
-    }
-
-    // геттер, возвращающий компоненты, соответствующие текущему пути
-    get getComponents () {
+    // метод, возвращающий компоненты, соответствующие текущему пути
+    getComponents () {
       if (this.routes) {
-        let components = this.routes.find(item => item.path == this.path);
+        let components = this.routes.find(item => item.path == this.getLocation.path);
         return components ? components : this.defaulRoute;
       } else {
         const error = new Error('STR-Warn: Не заданы маршруты. Routes are not defined.');
@@ -69,7 +65,7 @@ const Router = (() => {
     // геттер дефолтового компонента для 404 страниц
     get getDefaulRoute () {
       let defaulRoute;
-      if (this.routes) defaulRoute = this.routes.find(item => item.path == 'missingPage');
+      if (this.routes) defaulRoute = this.routes.find(item => item.path == '*');
       if (!defaulRoute) {
         const error = new Error('STR-Warn: Не задан маршрут по-умолчанию. Default route is not defined.');
         console.warn(error.message);
@@ -180,22 +176,45 @@ const Router = (() => {
       } else return [];
     }
 
+    // выполнение методов внутри компонента
+    _runMethods (component) {
+      const reg = /[^{]+(?=}})/ig;
+      let template = component.template;
+      const methods = component.methods;
+      let strMethods = [];
+      // тут все ок, ничего менять не нужно
+      let tempMethod;
+      while ((tempMethod = reg.exec(template)) !== null) {
+        strMethods = strMethods.concat(tempMethod);
+      }
+      if (strMethods !== null) {
+        strMethods.forEach(method => {
+          if (methods && methods[method]) template = template.replace(RegExp(`{{${method}}}`), methods[method]());
+        });
+      } return template;
+    }
+
     // рендеринг компонентов
-    // TODO: сделать метод, который запускает методы внутри компонента
     render () {
       this._setMountPlace();
-
       // WARN: ! парсинг DOM в виртуальный — не используется, не доделано
       // this.vnode = this.setVirtualDom(document.getElementsByTagName('body')[0]);
-
-      if (!this.getComponents) return;
+      if (!this.getComponents()) return;
       // чистка
       this._clearMountPlace();
+      let currentComponent = this.getComponents();
       // монтирование
       this.componentNames.forEach(name => {
-        if (this.getComponents.components.hasOwnProperty(name)) {
-          let component = this.getComponents.components[name]();
-          document.getElementsByName(`component-${name}`).forEach(node => node.insertAdjacentHTML('beforeend',component.template));
+        if (currentComponent.components.hasOwnProperty(name)) {
+          let component = (() => {
+            // проверка на тип компонента. может быть функцией или объектом
+            switch (typeof currentComponent.components[name]) {
+              case 'function': return currentComponent.components[name]();
+              case 'object':   return currentComponent.components[name];
+            }
+          })();
+          let template = this._runMethods(component);
+          document.getElementsByName(`component-${name}`).forEach(node => node.insertAdjacentHTML('beforeend',template));
         }
       });
     }

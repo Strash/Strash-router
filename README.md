@@ -1,6 +1,6 @@
 # Простой роутер
 
-**Version 0.1.0-beta**
+**Version 0.2.0-beta**
 
 
 
@@ -31,7 +31,7 @@ new Router([
   },
   // 404
   {
-    path: 'missingPage',
+    path: '*',
     components: {
       menu: Menu,
       pageError: PageError
@@ -49,20 +49,27 @@ new Router([
 ```
 
 3. Создание компонента
+Компонент может быть как функцией так и простым объектом. Внутри компонента доступны свойства `Component.template` в виде строки и `Component.methods` в виде объекта с методами. Можно вызывать методы внутри разметки с помощью двойных фигурных скобок `{{addLink}}`.
 ```javascript
-let Menu = () => {
+let Page = () => {
   return {
     template: `
-    <ul
-    style="
-    margin-top: 40px;
-    padding: 20px;
-    background-color: #d4d4d4;
-    ">
-      <li style="display:inline-block; margin-right:50px;"><a href="/">Main</li>
-      <li style="display:inline-block; margin-right:50px;"><a href="/about">About</li>
+    <div
+    style="padding: 10px 20px; background-color: #999;">
+      ${location.pathname}
     </div>
-    `
+    {{addLink}}`,
+    methods: {
+      checkRoute () {
+        if (/projects/.test(location.pathname)) return true;
+        else return false;
+      },
+      addLink () {
+        if (this.checkRoute())
+        return `<div style="margin:50px 0; padding: 50px; background-color:grey; height:150px; color: white;">Project</li>`;
+        else return '';
+      }
+    }
   };
 };
 ```
@@ -75,10 +82,9 @@ let Menu = () => {
 * [getComponents](#getComponents)
 * [getDefaulRoute](#getDefaulRoute)
 * [getLocation](#getLocation)
-* [origin](#origin)
-* [path](#path)
 * [render](#render)
 * [version](#version)
+* [window.$routes](#window.$routes)
 
 
 
@@ -91,12 +97,12 @@ let Menu = () => {
 
 ### getComponents
 
-Геттер `Router.getComponents` возвращает объект с компонентами, соответствующими текущему пути. В компонентах возвращаются тела функций. Если не заданы пути, то роутер выдаст предупреждение.
+Метод `Router.getComponents()` возвращает объект с компонентами, соответствующими текущему пути. В компонентах возвращаются тела функций. Если не заданы пути, то роутер выдаст предупреждение.
 ```javascript
 {
   components: {
-    menu:    function,
-    pageOne: function
+    menu:    function|object,
+    pageOne: function|object
   }
   path: '/'
 }
@@ -125,18 +131,6 @@ let Menu = () => {
 
 
 
-### origin
-
-Геттер `Router.origin` проксирует на `Router.getLocation.origin` и возвращает строку.
-
-
-
-### path
-
-Геттер `Router.path` проксирует на `Router.getLocation.path` и возвращает строку.
-
-
-
 ### render
 
 Метод `Router.render()` перерендерит страницу. Рендеринг осуществляется автоматически.
@@ -146,3 +140,9 @@ let Menu = () => {
 ### version
 
 Геттер `Router.version` возвращает строку с версией роутера.
+
+
+
+### window.$routes
+
+`window.$routes` является ссылкой на `Router.routes`.
