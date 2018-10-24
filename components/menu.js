@@ -1,4 +1,4 @@
-let Menu = {
+const Menu = {
   template: `
   <ul
   style="
@@ -8,6 +8,7 @@ let Menu = {
   ">
     <li style="display:inline-block; margin-right:50px;"><a href="/">Main</a></li>
     <li style="display:inline-block; margin-right:50px;"><a href="/projects">Projects</a></li>
+    <li style="display:inline-block; margin-right:50px;"><a href="/projects/subproject">Project</a></li>
     <li style="display:inline-block; margin-right:50px;"><a href="/about">About</a></li>
   </ul>
   `

@@ -39,20 +39,33 @@ window.STRouter = (() => {
     }
 
     /**
-     * Checking a component for the type of the current path.
+     * Compare paths and return a suitable router.
      *
-     * @param {(Object|Function)} route Route object
-     * @param {String} componentName Component name
-     * @returns {Object} Component object
+     * @returns {Object}
      * @memberof Router
      */
-    __typeOfRouteComponents__(route, componentName) {
-      switch (typeof route.components[componentName]) {
-        case 'function':
-          return route.components[componentName]();
-        case 'object':
-          return route.components[componentName];
-      }
+    __comparePaths__() {
+      let componentArr = '';
+      const locationArr = this.getLocation.path.split('/');
+      let component;
+      // если в пути последний символ '/', то при сплите в массив добавляется пустая строка и тут она убирается
+      // (locationArr.length > 2) нужно потому что массив для главной страницы будет ['',''] и если в нем обрезать последний элемент, то главная никогда не откроется
+      if (locationArr.length > 2 && locationArr[locationArr.length - 1] == '') locationArr.pop();
+      // достаем подходящий компонент
+      this.routes.forEach(item => {
+        let compareArr = [];
+        componentArr = item.path.split('/');
+        if (componentArr.length == locationArr.length) {
+          componentArr.forEach((str, i) => {
+            if (str.indexOf(':') == -1 && str === locationArr[i]) compareArr.push(1);
+            else if (str.indexOf(':') == -1 && str !== locationArr[i] && locationArr[i] == '') compareArr.push(0);
+            else if (str.indexOf(':') > -1) compareArr.push(1);
+            else compareArr.push(0);
+          });
+          if (!compareArr.some(num => num == 0)) component = item;
+        }
+      });
+      return component;
     }
 
     /**
@@ -71,6 +84,38 @@ window.STRouter = (() => {
       }
     }
 
+    __cleanListeners() {
+      // если тип без слушателей, то удаляем его
+      Object.keys(this.listeners).forEach(item => {
+        if (this.listeners[item].length == 0) delete this.listeners[item];
+      });
+      // если объект слушателей пуст, то удаляем его и закругляемся
+      if (Object.keys(this.listeners).length == 0) {
+        delete this.listeners;
+        return;
+      }
+    }
+
+    /**
+     * RUN BEFOREMOUNT IN CHILDREN
+     *
+     * @param {Object} parent
+     * @returns {Array} Promises
+     * @memberof Router
+     */
+    __runChildrenBeforeMount(parent) {
+      let map = [];
+      const recursion = parent => {
+        Object.keys(parent.children).forEach(name => {
+          const child = this.__typeOfComponent__(parent.children[name]);
+          if ('beforeMount' in child) map.push(child.beforeMount());
+          if ('children' in child) recursion(child);
+        });
+      };
+      recursion(parent);
+      return map.filter(item => item !== undefined);
+    }
+
     /**
      * Tracking click on links.
      *
@@ -78,11 +123,25 @@ window.STRouter = (() => {
      * @memberof Router
      */
     __clickWatching__(e) {
-      if (e.target.tagName == 'A') {
-        e.preventDefault();
-        this.links.push(e.target.toString());
-        history.pushState('', '', e.target.toString());
-        this.render();
+      if (e.target.tagName !== 'A') {
+        let parent = e.target.parentNode;
+        while (parent.tagName !== 'A') {
+          parent = parent.parentNode;
+          if (!parent.tagName) return;
+        }
+        if (parent.tagName == 'A' && RegExp(location.origin).test(parent.href)) {
+          e.preventDefault();
+          this.links.push(parent.href);
+          history.pushState('', '', parent.href);
+          this.render();
+        }
+      } else {
+        if (RegExp(location.origin).test(e.target.href)) {
+          e.preventDefault();
+          this.links.push(e.target.href);
+          history.pushState('', '', e.target.href);
+          this.render();
+        }
       }
     }
 
@@ -133,15 +192,59 @@ window.STRouter = (() => {
     }
 
     /**
-     * Execution of component methods.
+     * CHILDREN FUNCTION
      *
-     * @param {Object} component Component object
-     * @returns {String} Template string
+     * @param {Object} parentComponent
+     * @returns {String} template
      * @memberof Router
      */
-    _runMethods_(component) {
+    _renderChildComponent_(parentComponent) {
+      let parentTemplate = parentComponent.template;
+      return Promise.resolve()
+        .then(() => {
+          const __main = parent => {
+            if ('children' in parent) {
+              const childNames = Object.keys(parent.children);
+              childNames.forEach(name => {
+                const reg = `<router.*?\s*name[^\w]*${name}[^\w]*><\/[^\w]*router.*?>`;
+                const child = this.__typeOfComponent__(parent.children[name]);
+                let template = child.template;
+                if ('methods' in child) template = this._runMethods_(child);
+                if (RegExp(reg, 'g').test(parentTemplate)) {
+                  const regExec = RegExp(reg, 'g');
+                  let routerView, views = [];
+                  while ((routerView = regExec.exec(parentTemplate)) !== null) views = views.concat(routerView);
+                  // возможно покажется, что реплейсинг можно засунуть в while, но не стоит. от этого сильно страдает производительность
+                  views.forEach(view => parentTemplate = parentTemplate.replace(RegExp(view), template));
+                }
+                if ('mounted' in child) child.mounted();
+                if ('children' in child) __main(child);
+              });
+            }
+          };
+
+          /* jshint ignore:start */
+          const __asyncFun = async () => {
+            await Promise.all(this.__runChildrenBeforeMount(parentComponent));
+            __main(parentComponent);
+            return parentTemplate;
+          };
+          /* jshint ignore:end */
+          return __asyncFun();
+        });
+    }
+
+    /**
+     * RUN METHODS
+     *
+     * @param {Object} component
+     * @param {String} temp template
+     * @returns {String} template
+     * @memberof Router
+     */
+    _runMethods_(component, temp) {
       const reg = /[^{]+(?=}})/ig;
-      let template = component.template;
+      let template = temp || component.template;
       const methods = component.methods;
       let strMethods = [];
       // тут все ок, ничего менять не нужно
@@ -149,12 +252,28 @@ window.STRouter = (() => {
       while ((tempMethod = reg.exec(template)) !== null) {
         strMethods = strMethods.concat(tempMethod);
       }
-      if (strMethods !== null) {
-        strMethods.forEach(method => {
-          if (methods && methods[method]) template = template.replace(RegExp(`{{${method}}}`), methods[method]());
-        });
-      }
+      // возможно покажется, что реплейсинг можно засунуть в while, но не стоит. от этого сильно страдает производительность
+      strMethods.forEach(method => {
+        if (method && methods[method]) template = template.replace(RegExp(`{{${method}}}`), methods[method]());
+      });
       return template;
+    }
+
+
+    /**
+     * SET ACTIVE LINK
+     *
+     * @memberof Router
+     */
+    _setActiveLinks_() {
+      const links = document.getElementsByTagName('a');
+      setTimeout(() => {
+        Object.keys(links).forEach(link => {
+          if (document.getElementsByTagName('a')[link].href == location.href) {
+            document.getElementsByTagName('a')[link].classList.add('router-link-active');
+          } else document.getElementsByTagName('a')[link].classList.remove('router-link-active');
+        });
+      }, 100);
     }
 
     /**
@@ -164,7 +283,7 @@ window.STRouter = (() => {
      * @memberof Router
      */
     get version() {
-      return '0.4.0-beta';
+      return '1.0.0';
     }
 
     /**
@@ -207,7 +326,7 @@ window.STRouter = (() => {
      */
     getRouteComponents() {
       if (this.routes) {
-        let components = this.routes.find(item => item.path == this.getLocation.path);
+        const components = this.__comparePaths__();
         return components ? components : this.defaulRoute;
       } else {
         const error = new Error('STR-Warn: Не заданы маршруты. Routes are not defined.');
@@ -267,24 +386,16 @@ window.STRouter = (() => {
      */
     removeListeners(arg) {
       // TODO: прокинуть предупреждение, что не прослушиваются никакие объекты и реестр пуст и в каждое условие добавить сообщения
+      this.__cleanListeners();
       // если реестра нет или в нем не никого не зарегистрировано, то закругляемся
       if (!this.listeners) return;
-      // если тип без слушателей, то удаляем его
-      Object.keys(this.listeners).forEach(item => {
-        if (this.listeners[item].length == 0) delete this.listeners[item];
-      });
-      // если объект слушателей пуст, то удаляем его и закругляемся
-      if (Object.keys(this.listeners).length == 0) {
-        delete this.listeners;
-        return;
-      }
 
       // 0
       // очистка всех once листнеров без аргументов
       if (arguments.length == 0) {
         Object.keys(this.listeners).forEach(listenerType => {
           this.listeners[listenerType].forEach(item => {
-            if (item.once == true) item.target.removeEventListener(item.event, item.listener, item.options);
+            if (item.once == true) item.target.removeEventListener(item.type, item.listener, item.options);
           });
           this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.once == false);
         });
@@ -301,6 +412,7 @@ window.STRouter = (() => {
             });
             this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.name !== arg);
           });
+          this.__cleanListeners();
           return;
           // если объект
         } else if (typeof arg == 'object') {
@@ -314,6 +426,7 @@ window.STRouter = (() => {
               });
               this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.name !== arg);
             });
+            this.__cleanListeners();
             return;
           }
           // если передан только тип прослушиваемого объекта
@@ -325,35 +438,25 @@ window.STRouter = (() => {
               // чистка реестра
               this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.target !== target);
             });
+            this.__cleanListeners();
             return;
           }
           // если передан только тип прослушиваемого события
           else if ('type' in arg && Object.keys(arg).length == 1) {
             // проверка на наличие типа в реестре
-            if (type in this.listeners) {
-              this.listeners[type].forEach(item => item.target.removeEventListener(type, item.listener, item.options));
+            if (arg.type in this.listeners) {
+              this.listeners[arg.type].forEach(item => item.target.removeEventListener(arg.type, item.listener, item.options));
               // чистка реестра от типа
-              delete this.listeners[type];
+              delete this.listeners[arg.type];
+              this.__cleanListeners();
               return;
             }
           }
         }
       } else {
         // бросить исключение
-        console.log('removeListeners выбросил исключение');
+        console.log('STRouter.removeListeners выбросил исключение');
       }
-    }
-
-    /**
-     * Insertion a component inside the parent component.
-     *
-     * @param {(Object|Function)} component Component object
-     * @returns {String} Template string
-     * @memberof Router
-     */
-    insertComponent(component) {
-      if (!component) return;
-      return this._runMethods_(this.__typeOfComponent__(component));
     }
 
     /**
@@ -363,48 +466,53 @@ window.STRouter = (() => {
      */
     render() {
       this._setMountPlace_();
-      if (!this.getRouteComponents()) return;
+      const routeComponents = this.getRouteComponents();
+      if (!routeComponents) return;
       // чистка
       this._clearMountPlace_();
-      let currentRoute = this.getRouteComponents();
-
-      // вспомогательная функция монтирования
-      let __mountFun = name => {
-        let template = this._runMethods_(this.__typeOfRouteComponents__(currentRoute, name));
-        document.getElementsByName(`component-${name}`).forEach(node => node.insertAdjacentHTML('beforeend', template));
-      };
 
       // удаление листнеров с предыдущих страниц
       this.removeListeners();
 
       // монтирование
       this.componentNames.forEach(name => {
-        if (name in currentRoute.components) {
-          Promise.resolve(name)
-            .then(name => {
-              // если есть beforeMount, то сначала его выполняем, потом методы компонента, потом монтирование
-              if ('beforeMount' in this.__typeOfComponent__(currentRoute.components[name])) {
-                const beforeMount = this.__typeOfComponent__(currentRoute.components[name]).beforeMount();
-                // в beforeMount можно вернуть промис, или что-то другое, или вообще не возвращать
-                if (beforeMount && beforeMount.toString() == '[object Promise]') beforeMount.then(() => __mountFun(name));
-                else __mountFun(name);
-              } else __mountFun(name);
-            })
-            .then(() => {
-              if ('mounted' in this.__typeOfComponent__(currentRoute.components[name])) {
-                this.__typeOfComponent__(currentRoute.components[name]).mounted();
-              }
-            });
+        if (name in routeComponents.components) {
+          // основная шина без beforeMount
+          const __promise = component => {
+            const __buss = (component, template) => {
+              template = template || component.template;
+              if ('methods' in component) template = this._runMethods_(component, template);
+              document.getElementsByName(`component-${name}`).forEach(node => node.insertAdjacentHTML('beforeend', template));
+              if ('mounted' in component) component.mounted();
+              scrollTo(0, 0);
+            };
+
+            if ('children' in component) this._renderChildComponent_(component).then(res => __buss(component, res));
+            else __buss(component);
+          };
+
+          const component = this.__typeOfComponent__(routeComponents.components[name]);
+
+          // если есть beforeMount
+          if ('beforeMount' in component) {
+            const beforeMount = component.beforeMount();
+            // если это промис
+            if (beforeMount && beforeMount.toString() == '[object Promise]') {
+              beforeMount.then(() => __promise(component));
+              // если не промис
+            } else __promise(component);
+            // если нет beforeMount
+          } else __promise(component);
         }
       });
+
+      // установка класс для активных ссылок
+      this._setActiveLinks_();
     }
   }
 
-  Router.version           = Router.prototype.version;
-  Router.getLocation       = Router.prototype.getLocation;
-  Router.insertComponent   = Router.prototype.insertComponent;
-  Router._runMethods       = Router.prototype._runMethods_;
-  Router.__typeOfComponent = Router.prototype.__typeOfComponent__;
+  Router.version = Router.prototype.version;
+  Router.getLocation = Router.prototype.getLocation;
 
   return Router;
 })();

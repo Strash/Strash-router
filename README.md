@@ -1,6 +1,6 @@
 # Strash Router
 
-**Version 0.4.0-beta**
+**Version 1.0.0**
 
 
 
@@ -24,7 +24,7 @@
 
 В минифицированном файле роутера отсутствуют предупреждения об ошибках.
 ```javascript
-new STRouter([
+const router = new STRouter([
   {
     path: '/',
     components: {
@@ -39,6 +39,13 @@ new STRouter([
       pageTwo: PageTwo
     }
   },
+  {
+    path: '/project/:placeholder',
+    components: {
+      menu: Menu,
+      pageThree: PageThree
+    }
+  },
   // 404
   {
     path: '*',
@@ -48,7 +55,16 @@ new STRouter([
     }
   }
 ]);
+
+// запуск роутера
+router.render();
 ```
+
+
+
+
+### Плейсхолдеры пути
+Роутер поддерживает динамические пути с плейсхолдерами — `path: /project/:placeholder`. Что будет соответствовать пути `/projects/the-best-project` или `/projects/the-best-project/`. Плейсхолдеры могут быть многоуровневыми — `path: /project/:placeholder/info/:infopage`. Имя плейсхолдера ни к чему не привязано, поэтому не имеет значения.
 
 
 
@@ -58,6 +74,7 @@ new STRouter([
 <router-view name="menu"></router-view>
 <router-view name="pageOne"></router-view>
 <router-view name="pageTwo"></router-view>
+<router-view name="pageThree"></router-view>
 <router-view name="pageError"></router-view>
 ```
 При рендеринге тэги заменяются на `<div name="component-ComponentName">`. Внутрь `<div>` монтируется шаблон компонента.
@@ -65,6 +82,7 @@ new STRouter([
 <div name="component-menu"></div>
 <div name="component-pageOne"></div>
 <div name="component-pageTwo"></div>
+<div name="component-pageThree"></div>
 <div name="component-pageError"></div>
 ```
 
@@ -75,11 +93,12 @@ new STRouter([
 
 Компонент может быть как функцией, которая возвращает объект, так и простым объектом. Внутри компонента доступны свойства:
 * `Component.template` — строка шаблона;
+* `Component.children` — потомки компонента монтируются как есть без обертки. При этом в шаблон нужно добавить тэг `<router-view name="component"></router-view>`;
 * `Component.methods` — объект с методами. Методы можно вызывать внутри шаблона с помощью двойных фигурных скобок `{{addLink}}`, один должны возвращать строку. Роутером автоматически будут исполнятся только те методы, которые вызываются из шаблона;
 * `Component.beforeMount` — сюда можно записать события, которые нужно выполнить до монтирования компонента. Принимает функцию или промис, который нужно возвратить, чтобы поставить в цепочку.
 * `Component.mounted` — сюда можно добавить вызов методов или другие события, которые нужно выполнить во время монтирования компонента.
 
-Помимо свойств и методов роутера в шаблоне допускается использовать свои свойства и методы.
+Помимо свойств и методов роутера в компоненте допускается использовать свои незарезервированные свойства и методы, которые будут игнорироваться роутером.
 ```javascript
 import Header from './header.js';
 
@@ -87,11 +106,15 @@ let Page = () => {
   return {
     // шаблон
     template: `
-    <div
-    style="padding: 10px 20px; background-color: #999;">
-      {{addSubComponent}}
+    <div>
+      <router-view name="header"></router-view>
     </div>
     {{addLink}}`,
+    // потомки
+    children: {
+      // встраиваемый компонент
+      header: Header
+    },
     // методы
     methods: {
       _scroll () {
@@ -105,10 +128,6 @@ let Page = () => {
         if (this.checkRoute())
         return `<div style="margin:50px 0; padding: 50px; background-color:grey; height:150px; color: white;">Project</li>`;
         else return '';
-      },
-      // встраиваемый компонент
-      addSubComponent () {
-        return STRouter.insertComponent(Header);
       }
     },
     // действия выполняемые перед монтированием компонента
@@ -135,6 +154,11 @@ let Page = () => {
 
 
 
+### Активные ссылки
+Роутер автоматически проставляет активным ссылкам класс `.router-link-active`.
+
+
+
 
 ## Методы
 
@@ -142,7 +166,6 @@ let Page = () => {
 * [getDefaulRoute](#getdefaulroute)
 * [getLocation](#getlocation)
 * [getRouteComponents](#getroutecomponents)
-* [insertComponent](#insertcomponent)
 * [removeListeners](#removelisteners)
 * [render](#render)
 * [version](#version)
@@ -220,13 +243,6 @@ new STRouter().addListener({
 
 
 
-### insertComponent
-
-Метод `new STRouter().insertComponent()` или `STRouter.insertComponent()` принимает объект компонента и возвращает строку с шаблоном. Используется внутри родительского компонента для вложения. Метод нужно обернуть в метод компонента и вернуть из него строку в шаблон.
-
-
-
-
 ### removeListeners
 
 Метод `new STRouter().removeListeners()` принимает строку с именем слушателя или объект с тремя свойствами:
@@ -246,7 +262,7 @@ new STRouter().addListener({
 
 ### render
 
-Метод `new STRouter().render()` перерендерит страницу если экземпляр класса уже был создан. Если не был создан, то в роутер необходимо передать компонент, который должен быть отрендерен. По-умолчанию, рендеринг осуществляется автоматически.
+Метод `new STRouter().render()` перерендерит страницу если экземпляр класса уже был создан. Если не был создан, то в роутер необходимо передать компонент, который должен быть отрендерен.
 
 
 
