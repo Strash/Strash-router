@@ -29,6 +29,16 @@ window.STRouter = (() => {
     }
 
     /**
+     * Getting router version.
+     *
+     * @readonly
+     * @memberof Router
+     */
+    get version() {
+      return '1.0.1';
+    }
+
+    /**
      * Setting global aliases.
      *
      * @memberof Router
@@ -276,16 +286,6 @@ window.STRouter = (() => {
           } else document.getElementsByTagName('a')[link].classList.remove('router-link-active');
         });
       }, 100);
-    }
-
-    /**
-     * Getting router version.
-     *
-     * @readonly
-     * @memberof Router
-     */
-    get version() {
-      return '1.0.0';
     }
 
     /**
