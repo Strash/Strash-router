@@ -123,24 +123,26 @@ window.STRouter = (() => {
      * @memberof Router
      */
     __clickWatching__(e) {
-      if (e.target.tagName !== 'A') {
-        let parent = e.target.parentNode;
-        while (parent.tagName !== 'A') {
-          parent = parent.parentNode;
-          if (!parent.tagName) return;
-        }
-        if (parent.tagName == 'A' && RegExp(location.origin).test(parent.href)) {
-          e.preventDefault();
-          this.links.push(parent.href);
-          history.pushState('', '', parent.href);
-          this.render();
-        }
-      } else {
-        if (RegExp(location.origin).test(e.target.href)) {
-          e.preventDefault();
-          this.links.push(e.target.href);
-          history.pushState('', '', e.target.href);
-          this.render();
+      if (!e.target.hasAttribute('download')) {
+        if (e.target.tagName !== 'A') {
+          let parent = e.target.parentNode;
+          while (parent.tagName !== 'A') {
+            parent = parent.parentNode;
+            if (!parent.tagName) return;
+          }
+          if (parent.tagName == 'A' && RegExp(location.origin).test(parent.href)) {
+            e.preventDefault();
+            this.links.push(parent.href);
+            history.pushState('', '', parent.href);
+            this.render();
+          }
+        } else {
+          if (RegExp(location.origin).test(e.target.href)) {
+            e.preventDefault();
+            this.links.push(e.target.href);
+            history.pushState('', '', e.target.href);
+            this.render();
+          }
         }
       }
     }
