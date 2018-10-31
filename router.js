@@ -35,7 +35,7 @@ window.STRouter = (() => {
      * @memberof Router
      */
     get version() {
-      return '1.0.1';
+      return '1.0.2';
     }
 
     /**
@@ -138,7 +138,7 @@ window.STRouter = (() => {
           let parent = e.target.parentNode;
           while (parent.tagName !== 'A') {
             parent = parent.parentNode;
-            if (!parent.tagName) return;
+            if (parent == null || !parent.tagName) return;
           }
           if (parent.tagName == 'A' && RegExp(location.origin).test(parent.href)) {
             e.preventDefault();
