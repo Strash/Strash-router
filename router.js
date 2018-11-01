@@ -35,7 +35,7 @@ window.STRouter = (() => {
      * @memberof Router
      */
     get version() {
-      return '1.0.2';
+      return '1.0.3';
     }
 
     /**
@@ -401,6 +401,7 @@ window.STRouter = (() => {
           });
           this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.once == false);
         });
+        this.__cleanListeners();
         return;
 
         // 1
@@ -408,6 +409,7 @@ window.STRouter = (() => {
       } else if (arguments.length == 1) {
         // если строка с именем слушателя
         if (typeof arg == 'string') {
+          if (arg == '_routerClickWatcher' || arg == '_routerHistoryWatcher') return;
           Object.keys(this.listeners).forEach(listenerType => {
             this.listeners[listenerType].forEach(item => {
               if (item.name == arg) item.target.removeEventListener(item.type, item.listener, item.options);
@@ -418,10 +420,10 @@ window.STRouter = (() => {
           return;
           // если объект
         } else if (typeof arg == 'object') {
-          let argLength = Object.keys(arg).length;
           // если объект с именем слушателя
           // в этом условии будут приняты два варианта: когда только name и когда все три свойства
           if ('name' in arg) {
+            if (arg.name == '_routerClickWatcher' || arg.name == '_routerHistoryWatcher') return;
             Object.keys(this.listeners).forEach(listenerType => {
               this.listeners[listenerType].forEach(item => {
                 if (item.name == arg.name) item.target.removeEventListener(item.type, item.listener, item.options);
@@ -435,10 +437,17 @@ window.STRouter = (() => {
           else if ('target' in arg && Object.keys(arg).length == 1) {
             Object.keys(this.listeners).forEach(listenerType => {
               this.listeners[listenerType].forEach(item => {
-                if (item.target == target) target.removeEventListener(item.type, item.listener, item.options);
+                if (item.target == arg.target && item.name !== '_routerClickWatcher' ||
+                    item.target == arg.target && item.name !== '_routerHistoryWatcher') {
+                      item.target.removeEventListener(item.type, item.listener, item.options);
+                }
               });
               // чистка реестра
-              this.listeners[listenerType] = this.listeners[listenerType].filter(item => item.target !== target);
+              this.listeners[listenerType] = this.listeners[listenerType].filter(item => {
+                if (item.target == arg.target && item.name == '_routerClickWatcher' ||
+                    item.target == arg.target && item.name == '_routerHistoryWatcher') return item;
+                else if (item.target !== arg.target) return item;
+              });
             });
             this.__cleanListeners();
             return;
@@ -447,9 +456,12 @@ window.STRouter = (() => {
           else if ('type' in arg && Object.keys(arg).length == 1) {
             // проверка на наличие типа в реестре
             if (arg.type in this.listeners) {
-              this.listeners[arg.type].forEach(item => item.target.removeEventListener(arg.type, item.listener, item.options));
+              this.listeners[arg.type] = this.listeners[arg.type].filter(item => {
+                // исключение из очистки служебных слушателей
+                if (item.name == '_routerClickWatcher' || item.name == '_routerHistoryWatcher') return item;
+                else item.target.removeEventListener(arg.type, item.listener, item.options);
+              });
               // чистка реестра от типа
-              delete this.listeners[arg.type];
               this.__cleanListeners();
               return;
             }
