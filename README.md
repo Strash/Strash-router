@@ -1,6 +1,7 @@
 # Strash Router
 
 **Version 1.0.3**
+<!-- прописать в оглавлении все разделы -->
 
 
 
@@ -163,7 +164,7 @@ let Page = () => {
 ## Методы
 
 * [addListener](#addlistener)
-* [getDefaulRoute](#getdefaulroute)
+* [getDefaultRoute](#getdefaultroute)
 * [getLocation](#getlocation)
 * [getRouteComponents](#getroutecomponents)
 * [removeListeners](#removelisteners)
@@ -204,9 +205,9 @@ new STRouter().addListener({
 
 
 
-### getDefaulRoute
+### getDefaultRoute
 
-Геттер `new STRouter().getDefaulRoute` возвращает объект с компонентами для несуществующих страниц, например 404. Если не задан объект по-умолчанию, то роутер выдаст предупреждение.
+Геттер `new STRouter().getDefaultRoute` возвращает объект с компонентами для несуществующих страниц, например 404. Если не задан объект по-умолчанию, то роутер выдаст предупреждение.
 
 
 

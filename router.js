@@ -7,7 +7,7 @@ window.STRouter = (() => {
   class Router {
     constructor(routes = undefined) {
       this.routes = routes;
-      this.defaulRoute = this.getDefaulRoute;
+      this.defaultRoute = this.getDefaultRoute;
       this.links = [];
       this.componentNames = new Set();
 
@@ -310,14 +310,14 @@ window.STRouter = (() => {
      * @readonly
      * @memberof Router
      */
-    get getDefaulRoute() {
-      let defaulRoute;
-      if (this.routes) defaulRoute = this.routes.find(item => item.path == '*');
-      if (!defaulRoute) {
+    get getDefaultRoute() {
+      let defaultRoute;
+      if (this.routes) defaultRoute = this.routes.find(item => item.path == '*');
+      if (!defaultRoute) {
         const error = new Error('STR-Warn: Не задан маршрут по-умолчанию. Default route is not defined.');
         console.warn(error.message);
       }
-      return defaulRoute;
+      return defaultRoute;
     }
 
     /**
@@ -329,7 +329,7 @@ window.STRouter = (() => {
     getRouteComponents() {
       if (this.routes) {
         const components = this.__comparePaths__();
-        return components ? components : this.defaulRoute;
+        return components ? components : this.defaultRoute;
       } else {
         const error = new Error('STR-Warn: Не заданы маршруты. Routes are not defined.');
         console.warn(error.message);
@@ -530,3 +530,5 @@ window.STRouter = (() => {
 
   return Router;
 })();
+
+// https://dev.to/ycmjason/building-a-simple-virtual-dom-from-scratch-3d05
