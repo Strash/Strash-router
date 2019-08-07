@@ -13,7 +13,7 @@ window.router = new STRouter([
     components: {
       menu: Menu,
       href: Href,
-      page: Main
+      pageMain: Main
     }
   },
   {
@@ -21,7 +21,7 @@ window.router = new STRouter([
     components: {
       menu: Menu,
       href: Href,
-      page: Projects
+      pageProj: Projects
     }
   },
   {
@@ -29,7 +29,7 @@ window.router = new STRouter([
     components: {
       menu: Menu,
       href: Href,
-      page: Subproject
+      pageSub: Subproject
     }
   },
   {
@@ -37,7 +37,7 @@ window.router = new STRouter([
     components: {
       menu: Menu,
       href: Href,
-      page: About
+      pageAbout: About
     }
   },
   // 404
@@ -46,9 +46,10 @@ window.router = new STRouter([
     components: {
       menu: Menu,
       href: Href,
-      page: Default
+      pageDef: Default
     }
   }
-]);
-
-router.render();
+], {
+  mode: 'development',
+  titlePrefix: 'STR | '
+});

@@ -345,7 +345,7 @@ window.STRouter = (() => {
      * type     {String} — required event type;
      * listener {Function} — required callback function;
      * options  {Object} — an optional object that defines the characteristics of an object listening for an event;
-     * name     {String} — a mandatory name that identifies the listener's name in the list of listeners;
+     * name     {String} — required name that identifies the listener's name in the list of listeners;
      * once     {Boolean} — lifetime of the listener. If true, when moving to another page, the listener is automatically deleted from the listened object, as well as from the list of listeners
      * }
      * @memberof Router

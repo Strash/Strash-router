@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>router</title>
+</head>
+<body>
+  <style>
+    .router-link-active {
+      color: black;
+      text-decoration: none;
+      cursor: default;
+    }
+  </style>
+  <H1 class="header">Strash Router</H1>
+  <a href="/asd" target="_self">asdfdsadsf</a>
+  <a href="/asd" target="_blank">asdfdsadsf</a>
+  <a href="https://strash.ru" target="_blank">asdfdsadsf</a>
+  <a href="https://strash.ru" target="_self">asdfdsadsf</a>
+  <router-view name="menu"></router-view>
+  <router-view name="href"></router-view>
+  <router-view name="page"></router-view>
+</body>
+<script src="/router.js"></script>
+<script type="module" src="/main.js"></script>
+</html>
