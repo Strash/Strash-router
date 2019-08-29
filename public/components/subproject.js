@@ -1,6 +1,9 @@
 const Subproject = () => {
   return {
     template: `{{addLink}}`,
+    data: {
+
+    },
     methods: {
       addLink () {
         return `

@@ -1,27 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>router</title>
 </head>
+
 <body>
   <style>
-    .router-link-active {
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: antiquewhite;
+      font-family: Arial, Helvetica, sans-serif;
       color: black;
+      padding: 50px;
+    }
+
+    a {
+      color: dodgerblue;
+      text-decoration: none;
+    }
+
+    .router-link-active {
+      color:palevioletred;
       text-decoration: none;
       cursor: default;
     }
+
+    h1 {
+      font-weight: normal;
+      margin-bottom: 50px;
+    }
+
+    h1 > span {
+      font-weight: bold;
+    }
   </style>
-  <H1 class="header">Strash Router</H1>
-  <a href="/asd" target="_self">asdfdsadsf</a>
-  <a href="/asd" target="_blank">asdfdsadsf</a>
-  <a href="https://strash.ru" target="_blank">asdfdsadsf</a>
-  <a href="https://strash.ru" target="_self">asdfdsadsf</a>
-  <router-view name="menu"></router-view>
-  <router-view name="href"></router-view>
-  <router-view name="page"></router-view>
+  <H1 class="header"><a href="/">Strash Router</a>.&nbsp;<span>The best router</span></H1>
+  <a href="/asd" target="_self">"asd" target self</a>&nbsp;/
+  <a href="/asd" target="_blank">"asd" target blank</a>&nbsp;/
+  <a href="https://strash.ru" target="_self">"strash.ru" target self</a>&nbsp;/
+  <a href="https://strash.ru" target="_blank">"strash.ru" target blank</a>&nbsp;/
+  <a href="/assets/icon.svg" download>
+      <svg viewBox="0 0 12 16" width="12" height="16">
+      <path fill-rule="evenodd"
+        d="M6 5H2V4h4v1zM2 8h7V7H2v1zm0 2h7V9H2v1zm0 2h7v-1H2v1zm10-7.5V14c0 .55-.45 1-1 1H1c-.55 0-1-.45-1-1V2c0-.55.45-1 1-1h7.5L12 4.5zM11 5L8 2H1v12h10V5z">
+      </path>
+    </svg>
+  </a>
+  <router-view class="menu">asdf</router-view>
+  <router-view class="href"></router-view>
+  <router-view class="pageMain"></router-view>
+  <router-view class="pageProj"></router-view>
+  <router-view class="pageSub"></router-view>
+  <router-view class="pageAbout"></router-view>
+  <router-view class="pageDef"></router-view>
+  <script>
+    console.info('test message from DOM')
+  </script>
+  <!-- asdffdsa -->
+  <!-- <div><span>64371</span></div> -->
 </body>
 <script src="/router.js"></script>
 <script type="module" src="/main.js"></script>
+
 </html>
