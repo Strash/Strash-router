@@ -278,7 +278,10 @@ window.STRouter = (function () {
       this.routes = Object.create(null);
       // виртуальный DOM
       this.vn = getVNode(document.body.childNodes);
-
+      // очистка бодей
+      document.body.innerHTML = '';
+      // отрисовка из виртуального DOM
+      setDOM(this.vn, document.body);
       // TODO: тут про дефолтовый роутер
       // this.defaultRoute = this.getDefaultRoute;
 
@@ -515,9 +518,7 @@ window.STRouter = (function () {
 
     // Component rendering
     render() {
-      document.body.innerHTML = '';
 
-      setDOM(this.vn, document.body);
 
       // TODO: temporary
       observer.observe(document.body, {childList: true, attributes: true, characterData: true, subtree: true, attributeOldValue: true, characterDataOldValue: true});
