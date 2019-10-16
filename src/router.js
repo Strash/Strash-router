@@ -1,7 +1,6 @@
 // TODO: добавить возможность пробрасывать в дочерние компоненты данные через аргумент подключенного потомка или как-то еще
 // TODO: виртуальный DOM
 // TODO: добавить data в корень компонента так, чтобы он был виден из любого места, хоть из корня, хоть из методов и т.д.
-// TODO: убрать обязательное присутствие дефолтового пути
 // TODO: поправить README.md
 
 /**
@@ -14,6 +13,8 @@
  * - __clickWatching__
  * - _setMountPlace
  * - <div name="component-name"> -> <div class="component-name">
+ * - __comparePaths__
+ * - getDefaultRoute
  */
 
 /**
@@ -48,6 +49,22 @@
  * - для дочерних компонентов доступен родительский компонент через parent;
  * - VDOM в виде объекта дерева DOM. При загрузке страницы собирает DOM в VDOM, чистит все внутри body и ререндерит уже из VDOM;
  * - рефакторинг.
+ * - - - - - - - - - - -
+ * - комментарии в разметке рендерятся только в режиме development;
+ * - внутри компонента свой виртуальный кусок DOM из template;
+ * - если в компоненте нет template, то в консоле выдается предупреждение;
+ * - getRouteComponents теперь геттер и возвращает объект вида { имя пути: [имя компонента, ...] };
+ * - __clickWatching__ переименован в _clickWatching;
+ * - убран геттер getDefaultRoute и дефолтовый маршрут '*' теперь необязателен;
+ * - поправлена установка CONFIG;
+ * - добалено сообщение о том, что включен режим разработки;
+ * - hasRouterViewClassAttribute переименован в hasRouterViewNameAttribute и проверяет наличие атрибута name с именем роутера;
+ * - hasRouterViewNameAttribute теперь проверяет по ходу создания VNODE, соответственно проверяет и точки монтирования внутри компонентов;
+ * - добавлена проверка количества имен у точки монтирования hasRouterViewMultipleNames. Если их несколько, то сохраняется только первое, остальные игнорируются;
+ * - добавлено сравнение точки монтирования с именами компонентов для текущего пути isEqualRoute;
+ * - добавлено свойство в объект vn точки монтирования - layer. Нужен для того чтобы отличать точки монтирования: из разметки и из компонентов — 'DOM'/'component';
+ * - во всех точках монтирования разметка рендерится как есть, без дополнительных оберток;
+ * - реализован рендеринг из основного VNODE и из VNODE компонентов.
  */
 
 
@@ -66,19 +83,15 @@ window.STRouter = (function () {
   // Проверка типа компонента
   function checkComponentType(component) {
     switch (typeof component) {
-      case 'function':
-        return component();
-      case 'object':
-        return component;
+      case 'function': return component();
+      case 'object':   return component;
     }
   }
-
   // Проверка режима
   function isDevMode() {
     if (CONFIG.mode == 'development') return true;
     else return false;
   }
-
   // Проверка точек монтирования
   function isRouterViewTagExist() {
     if (document.getElementsByTagName('router-view').length == 0) {
@@ -86,67 +99,58 @@ window.STRouter = (function () {
       return false;
     } else return true;
   }
-
-  // Проверка наличия атрибута class у точки монтирования
-  function hasRouterViewClassAttribute() {
-    for (let i = 0; i < document.getElementsByTagName('router-view').length; i++) {
-      if (document.getElementsByTagName('router-view')[i].hasAttribute('class') == false) {
-        if (isDevMode()) warn('Тэг router-view должен содержать атрибут class с названием. Например, <router-view class="my-router"></router-view>');
-        return false;
-      } else return true;
-    }
+  // Проверка наличия атрибута name у точки монтирования - <router-view>
+  function hasRouterViewNameAttribute(node) {
+    if (!node.hasAttribute('name')) {
+      if (isDevMode()) warn(`Тэг ${node.outerHTML} router-view должен содержать атрибут name с именем точки монтирования. Например, <router-view name="my-router"></router-view>`);
+      return false;
+    } else return true;
+  }
+  // Проверка наличия нескольких имён у точки монтирования
+  function hasRouterViewMultipleNames(node) {
+    if (node.hasAttribute('name') && node.getAttribute('name').split(' ').length > 1) {
+      const name = node.getAttribute('name').split(' ')[0];
+      if (isDevMode()) warn(`Точка монтирования ${node.outerHTML} содержит больше одного имени. Использоваться будет только первое — "${name}", остальные будут игнорироваться.`);
+      return name;
+    } else return false;
+  }
+  // Проверка наличия путей при создании экземпляра роутера
+  function isRoutesExist(routes) {
+    if (routes == undefined || routes == null) {
+      warn('Для экземлпяра роутера не заданы маршруты с компонентами.');
+      return false;
+    } else return true;
+  }
+  // Сравнение точки монтирования с допустимыми именами компонентов для текущего пути
+  function isEqualRoute(vnode, routeComponents) {
+    let attributeValue;
+    for (let i = 0; i < vnode.attributes.length; i++) { if (vnode.attributes[i].name == 'name') attributeValue = vnode.attributes[i].value; break; }
+    if (Object.keys(routeComponents).some(route => routeComponents[route].some(name => name == attributeValue))) return attributeValue;
+    else return undefined;
   }
 
+
+  // Регистрация объекта путей вида {"path": ["component", ...]}
+  function _collectRoutes(route) {
+    this.routes[route.path] = Object.keys(route.components);
+  }
+  // Создание компонентов
+  function _createComponentsFromRoute(components) {
+    Object.keys(components).forEach(name => this.components[name] = new STRComponent(name, components[name]));
+  }
   // Регистрация компонентов и путей
-  function collectComponents(routes) {
+  function collectComponentsFromRoute(routes) {
+    if (!isRoutesExist(routes)) return;
     let components = Object.create(null);
     if (Array.isArray(routes)) {
       routes.forEach(route => {
-        __collectRoutes.bind(this)(route);
+        _collectRoutes.call(this, route);
         components = {...components, ...route.components};
       });
-      __createComponents.bind(this)(components);
+      _createComponentsFromRoute.call(this, components);
     } else if (typeof routes == 'object') {
-      __collectRoutes.bind(this)(routes);
-      __createComponents.bind(this)(routes.components);
-    }
-  }
-
-  // Регистрация объекта путей вида {"path": ["component", ...]}
-  function __collectRoutes(route) {
-    this.routes[route.path] = Object.keys(route.components);
-  }
-
-  // Создание компонентов
-  function __createComponents(components) {
-    Object.keys(components).forEach(name => this.components[name] = new STRComponent(name, components[name]));
-  }
-
-  // Замена тэгов router-view на div и добавление в компонент
-  function setMountPlace(components) {
-    // фильтрация атрибута class. убирает класс с именем компонента
-    const filterClasses = (classes, names) => classes.filter(c => c != names);
-
-    try {
-      const componentNames = [...Object.keys(components)];
-      for (let i = 0; i < componentNames.length; i++) {
-        // проверка точки монтирования
-        if (!document.querySelector(`router-view[class*=${componentNames[i]}]`)) {
-          throw Error(`Для компонента ${componentNames[i]} не найден тэг <router-view class="${componentNames[i]}"></router-view> в разметке.`);
-        }
-        const view = document.querySelector(`router-view[class*=${componentNames[i]}]`);
-        components[componentNames[i]].self = document.createElement('div');
-        // сохранение всех атрибутов
-        for (let j = 0; j < view.attributes.length; j++) {
-          if (view.attributes[j].name == 'class') {
-            components[componentNames[i]].self.setAttribute('class', `component-${componentNames[i]} ${filterClasses(view.attributes[j].value.split(' '), componentNames[i]).join(' ')}`);
-          } else components[componentNames[i]].self.setAttribute(view.attributes[j].name, view.attributes[j].value);
-        }
-        view.insertAdjacentElement('beforebegin', components[componentNames[i]].self);
-        view.remove();
-      }
-    } catch (e) {
-      console.error(e);
+      _collectRoutes.call(this, routes);
+      _createComponentsFromRoute.call(this, routes.components);
     }
   }
 
@@ -156,60 +160,97 @@ window.STRouter = (function () {
 
   // VNODE
   // создание виртуального элемента
-  function createElementVNode(node, vnList) {
-    node.attributes.map = Array.prototype.map; // наследование
+  function _createElementVNode(node, vnList, layout) {
+    let name;
+    if (node.nodeName == 'ROUTER-VIEW') {
+      if (!hasRouterViewNameAttribute(node)) return; // если нет имени, то VNODE для точки монтирования не создается
+      name = hasRouterViewMultipleNames(node); // если у точки монтирования несколько имен, то сохраняется только первое
+    }
     let obj = Object.create(null); // создание объекта без наследования
+    obj.layout = layout;
     obj.nodeType = 1;
     obj.nodeName = node.nodeName;
     obj.namespaceURI = node.namespaceURI;
-    obj.attributes = node.attributes.map(a => { return { name: a.name, value: a.value }; });
-    obj.children = node.childNodes.length > 0 ? getVNode(node.childNodes) : null;
+    obj.attributes = node.attributes.length > 0 ? [] : null;
+    for (let i = 0; i < node.attributes.length; i++) {
+      obj.attributes.push({
+        name: node.attributes[i].name,
+        value: node.attributes[i].name == 'name' && name ? name : node.attributes[i].value
+      });
+    }
+    obj.children = node.childNodes.length > 0 ? getVNode(node.childNodes, layout) : null;
     vnList.push(obj);
   }
   // создание виртуального текстового элемента
-  function createTextVNode(node, vnList) {
+  function _createTextVNode(node, vnList, layout) {
     let obj = Object.create(null);
+    obj.layout = layout;
     obj.nodeType = 3;
     obj.nodeName = node.nodeName; // '#text'
     obj.nodeValue = node.nodeValue;
     vnList.push(obj);
   }
   // создание виртуального комментария
-  function createCommentVNode(node, vnList) {
+  function _createCommentVNode(node, vnList, layout) {
     let obj = Object.create(null);
+    obj.layout = layout;
     obj.nodeType = 8;
     obj.nodeName = node.nodeName; // '#comment'
     obj.nodeValue = node.nodeValue;
     vnList.push(obj);
   }
   // рекурсионный проход по дереву DOM и клонирование элементов в vnode
-  function getVNode(nodeList) {
+  function getVNode(nodeList, layout) {
     let vnode = Array(0);
     for(let n = 0; n < nodeList.length; n++) {
       switch (nodeList[n].nodeType) {
-        case 1: createElementVNode(nodeList[n], vnode); break; // element node
-        case 3: createTextVNode(nodeList[n], vnode); break; // text node
-        case 8: createCommentVNode(nodeList[n], vnode); // comment node
+        case 1: _createElementVNode(nodeList[n], vnode, layout); break; // element node
+        case 3: _createTextVNode(nodeList[n], vnode, layout); break; // text node
+        case 8: _createCommentVNode(nodeList[n], vnode, layout); break; // comment node
       }
     }
     return vnode;
   }
 
+
+
+  // Замена router-view на DOM компонента
+  function setMountPlace(vnode) {
+    if (vnode.layout == 'DOM') {
+      const routeComponents = this.getRouteComponents;
+      const componentName = isEqualRoute(vnode, routeComponents);
+      if (componentName !== undefined) {
+        vnode.self = document.createDocumentFragment();
+        setDOM.call(this, this.components[componentName].vn, vnode.self);
+      }
+    } else if (vnode.layout == 'component') {
+      for (let i = 0; i < vnode.attributes.length; i++) {
+        if (vnode.attributes[i].name == 'name') {
+          vnode.self = document.createDocumentFragment();
+          setDOM.call(this, this.getComponent(vnode.attributes[i].value).vn, vnode.self); break;
+        }
+      }
+    }
+  }
+
   // создание элемента
   function createElement(vnode) {
-    let el;
     // условие для svg и других элементов со своим пространством имен
     if (vnode.namespaceURI.indexOf('xhtml') == -1) {
-      el = document.createElementNS(vnode.namespaceURI, vnode.nodeName);
-      vnode.attributes.forEach(a => el.setAttribute(a.name, a.value));
+      vnode.self = document.createElementNS(vnode.namespaceURI, vnode.nodeName);
+      vnode.attributes.forEach(a => vnode.self.setAttribute(a.name, a.value));
     // условие для обычных элементов
     } else {
-      el = document.createElement(vnode.nodeName);
-      vnode.attributes.forEach(a => el.setAttribute(a.name, a.value));
+      if (vnode.nodeName == 'ROUTER-VIEW') {
+        setMountPlace.call(this, vnode); // вставка точки монтирования вместо тэга <router-view>
+      } else {
+        vnode.self = document.createElement(vnode.nodeName);
+        if (vnode.attributes !== null) vnode.attributes.forEach(a => vnode.self.setAttribute(a.name, a.value));
+      }
     }
     // если есть потомки
-    if (vnode.children !== null) setDOM(vnode.children, el);
-    return el;
+    if (vnode.nodeName !== 'ROUTER-VIEW' && vnode.children !== null) setDOM.call(this, vnode.children, vnode.self);
+    return vnode;
   }
   // создание текстового элемента
   function createText(vnode) {
@@ -223,9 +264,11 @@ window.STRouter = (function () {
   function setDOM(vnodeList, parent) {
     for(let n = 0; n < vnodeList.length; n++) {
       switch (vnodeList[n].nodeType) {
-        case 1: parent.appendChild(createElement(vnodeList[n])); break; // element node
+        case 1:
+          const element = createElement.call(this, vnodeList[n]);
+          if (element.self !== undefined) parent.appendChild(element.self); break; // element node
         case 3: parent.appendChild(createText(vnodeList[n])); break; // text node
-        case 8: parent.appendChild(createComment(vnodeList[n])); // comment node
+        case 8: if (isDevMode()) { parent.appendChild(createComment(vnodeList[n])); break; } // comment node
       }
     }
   }
@@ -233,8 +276,8 @@ window.STRouter = (function () {
 
 
 
-  const observer = new MutationObserver(o => console.log(o));
 
+  const observer = new MutationObserver(o => console.log(o));
 
 
 
@@ -246,6 +289,14 @@ window.STRouter = (function () {
       this.name = name;
       // перенос всех свойств и методов в компонент
       Object.keys(checkComponentType(component)).forEach(key => this[key] = checkComponentType(component)[key]);
+      // проверяем есть ли template
+      if ('template' in this) {
+        const container = document.createElement('div');
+        container.innerHTML = this.template;
+        this.vn = getVNode(container.childNodes, 'component'); // виртуальный DOM компонента
+      } else {
+        if (isDevMode()) warn(`В компоненте "${this.name}" не найдено свойство "template".`);
+      }
       // если есть потомки
       if ('children' in this) {
         Object.keys(this.children).forEach(name => {
@@ -266,42 +317,36 @@ window.STRouter = (function () {
     constructor(routes, config) {
       // объект конфигураций
       CONFIG = {
-        mode: config.mode || 'production',
-        titlePrefix: config.titlePrefix || '',
-        titlePostfix: config.titlePostfix || ''
+        mode:         config && config.mode ? config.mode : 'production',
+        titlePrefix:  config && config.titlePrefix ? config.titlePrefix : '',
+        titlePostfix: config && config.titlePostfix ? config.titlePostfix : ''
       };
-      // реестр слушателей
-      this.listeners = Object.create(null);
-      // объект компонентов
-      this.components = Object.create(null);
-      // пути
-      this.routes = Object.create(null);
-      // виртуальный DOM
-      this.vn = getVNode(document.body.childNodes);
-      // очистка бодей
-      document.body.innerHTML = '';
-      // отрисовка из виртуального DOM
-      setDOM(this.vn, document.body);
-      // TODO: тут про дефолтовый роутер
-      // this.defaultRoute = this.getDefaultRoute;
 
-      // проверка на наличие тэга <router-view>
-      isRouterViewTagExist();
-      // проверка на наличие атрибута class у тэга <router-view>
-      hasRouterViewClassAttribute();
-      // сбор компонентов
-      collectComponents.bind(this)(routes);
-      // вставка точки монтирования вместо тэга <router-view>
-      // setMountPlace.bind(this)(this.components);
-      // установка тайтла страницы
-      document.title = CONFIG.titlePrefix + document.title + CONFIG.titlePostfix;
-      // рендеринг
-      this.render();
+      if (isDevMode()) info('Вы находитесь в режиме разработки "development".');
+
+      this.listeners  = Object.create(null);  // реестр слушателей
+      this.components = Object.create(null);  // объект компонентов
+      this.routes     = Object.create(null);  // пути
+
+      isRouterViewTagExist(); // проверка на наличие тэга <router-view>
+      // hasRouterViewNameAttribute(); // проверка на наличие атрибута name у тэга <router-view>
+
+      this.vn = getVNode(document.body.childNodes, 'DOM'); // виртуальный DOM
+
+      collectComponentsFromRoute.call(this, routes); // сбор компонентов
+
+      // TODO: возможно перенести в render()
+      document.body.innerHTML = ''; // очистка бодей
+      setDOM.call(this, this.vn, document.body); // отрисовка из виртуального DOM
+
+      document.title = CONFIG.titlePrefix + document.title + CONFIG.titlePostfix; // установка тайтла страницы
+
+      this.render(); // рендеринг
 
       // системный слушатель нажатия по ссылкам
       this.addListener({
         target: document,
-        listener: this.__clickWatching.bind(this),
+        listener: this._clickWatching.bind(this),
         name: '_routerClickWatcher'
       });
       // системный слушатель перемещения по истории браузера кнопками "назад" / "вперед"
@@ -346,7 +391,7 @@ window.STRouter = (function () {
      *
      * @param {Object} e — объект события
      */
-    __clickWatching(e) {
+    _clickWatching(e) {
       // TODO: прокидывать тайтлы страницы
       const __setRoute = (url, title) => {
         e.preventDefault();
@@ -514,11 +559,48 @@ window.STRouter = (function () {
       }
     }
 
+    // getting component by name
+    getComponent(name) {
+      let component;
+      function _getComponentFromLayer(layer) {
+        Object.keys(layer).forEach(cmpnnt => {
+          if (cmpnnt == name) component = layer[cmpnnt];
+          if ('children' in layer[cmpnnt]) _getComponentFromLayer(layer[cmpnnt].children);
+        });
+      }
+      _getComponentFromLayer(this.components);
+      return component;
+    }
 
+    // getting route component names
+    get getRouteComponents() {
+      let componentArr = [];
+      const locationArr = this.location.path.split('/');
+      let component;
+      // если в пути последний символ '/', то при сплите в массив добавляется пустая строка и тут она убирается
+      // (locationArr.length > 2) нужно потому что массив для главной страницы будет ['',''] и если в нем обрезать последний элемент, то главная никогда не откроется
+      if (locationArr.length > 2 && locationArr[locationArr.length - 1] == '') locationArr.pop();
+      // достаем подходящий компонент
+      Object.keys(this.routes).forEach(route => {
+        let compareArr = [];
+        componentArr = route.split('/');
+        if (componentArr.length == locationArr.length) {
+          componentArr.forEach((str, i) => {
+            if (str.indexOf(':') == -1 && str === locationArr[i]) compareArr.push(1);
+            else if (str.indexOf(':') == -1 && str !== locationArr[i] && locationArr[i] == '') compareArr.push(0);
+            else if (str.indexOf(':') > -1) compareArr.push(1);
+            else compareArr.push(0);
+          });
+          if (!compareArr.some(num => num == 0)) component = route;
+        }
+      });
+      if (component) return {[component]: this.routes[component]};
+      else if (this.routes['*']) return {'*': this.routes['*']};
+      else { if (isDevMode()) warn('Для этого пути не определен маршрут и нет маршрута по-умолчанию "*".'); return undefined; }
+    }
 
     // Component rendering
     render() {
-
 
       // TODO: temporary
       observer.observe(document.body, {childList: true, attributes: true, characterData: true, subtree: true, attributeOldValue: true, characterDataOldValue: true});
