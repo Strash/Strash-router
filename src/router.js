@@ -15,6 +15,9 @@
  * - <div name="component-name"> -> <div class="component-name">
  * - __comparePaths__
  * - getDefaultRoute
+ * - _clearMountPlace_
+ * - __typeOfComponent__
+ * - STRouter.links
  */
 
 /**
@@ -65,12 +68,23 @@
  * - добавлено свойство в объект vn точки монтирования - layer. Нужен для того чтобы отличать точки монтирования: из разметки и из компонентов — 'DOM'/'component';
  * - во всех точках монтирования разметка рендерится как есть, без дополнительных оберток;
  * - реализован рендеринг из основного VNODE и из VNODE компонентов.
+ * - - - - - - - - - - -
+ * - добавлена функция установка тайтла - setTitle;
+ * - в свойство children объектов router.vn для router-view добавляются виртуальные ноды их потомков из компонентов;
+ * - в виртуальные объекты текстового узла и комментария добавлено свойство self;
+ * - setMountPlace переименован в mount;
+ * - getRouteComponents теперь возвращает объект с двумя свойствами {route: '/', component: ['componentName', ...]};
+ * - добавлена функция нахождения имени компонента из атрибута VNODE - getComponentName;
+ * - после создания экземпляра компонента, в нем доступна ссылка на роутер - $router;
  */
 
 
 window.STRouter = (function () {
   // GLOBAL CONFIG
   let CONFIG;
+
+  // GLOBAL OBSERVER
+  const OBSERVER = new MutationObserver(mutationObserving);
 
   // Консольные сообщения
   function info(message) {
@@ -79,6 +93,8 @@ window.STRouter = (function () {
   function warn(message) {
     console.warn(`STR-Warn: ${message}`);
   }
+
+
 
   // Проверка типа компонента
   function checkComponentType(component) {
@@ -123,16 +139,23 @@ window.STRouter = (function () {
   }
   // Сравнение точки монтирования с допустимыми именами компонентов для текущего пути
   function isEqualRoute(vnode, routeComponents) {
-    let attributeValue;
-    for (let i = 0; i < vnode.attributes.length; i++) { if (vnode.attributes[i].name == 'name') attributeValue = vnode.attributes[i].value; break; }
-    if (Object.keys(routeComponents).some(route => routeComponents[route].some(name => name == attributeValue))) return attributeValue;
+    let attributeValue = getComponentName(vnode);
+    if (routeComponents.component.some(name => name == attributeValue)) return attributeValue;
     else return undefined;
   }
 
 
-  // Регистрация объекта путей вида {"path": ["component", ...]}
+
+  // Установка тайтла страницы
+  function setTitle(title = document.title) {
+    const cleanTitle = title.replace(CONFIG.titlePrefix, '').replace(CONFIG.titlePostfix, '');
+    return (document.title = `${CONFIG.titlePrefix}${cleanTitle}${CONFIG.titlePostfix}`);
+  }
+
+  // Регистрация объекта путей вида {"path": ["componentName", ...]}
   function _collectRoutes(route) {
-    this.routes[route.path] = Object.keys(route.components);
+    if ('path' in route) this.routes[route.path] = Object.keys(route.components);
+    else warn('Нужно указать "path" маршрута при создании роутера');
   }
   // Создание компонентов
   function _createComponentsFromRoute(components) {
@@ -153,6 +176,12 @@ window.STRouter = (function () {
       _createComponentsFromRoute.call(this, routes.components);
     }
   }
+  // Определение имени компонента из аттрибута VNODE точки монтирования
+  function getComponentName(vnode) {
+    for (let i = 0; i < vnode.attributes.length; i++) {
+      if (vnode.attributes[i].name == 'name') return vnode.attributes[i].value;
+    } return undefined;
+  }
 
 
 
@@ -167,6 +196,7 @@ window.STRouter = (function () {
       name = hasRouterViewMultipleNames(node); // если у точки монтирования несколько имен, то сохраняется только первое
     }
     let obj = Object.create(null); // создание объекта без наследования
+    obj.self = node;
     obj.layout = layout;
     obj.nodeType = 1;
     obj.nodeName = node.nodeName;
@@ -184,6 +214,7 @@ window.STRouter = (function () {
   // создание виртуального текстового элемента
   function _createTextVNode(node, vnList, layout) {
     let obj = Object.create(null);
+    obj.self = node;
     obj.layout = layout;
     obj.nodeType = 3;
     obj.nodeName = node.nodeName; // '#text'
@@ -193,6 +224,7 @@ window.STRouter = (function () {
   // создание виртуального комментария
   function _createCommentVNode(node, vnList, layout) {
     let obj = Object.create(null);
+    obj.self = node;
     obj.layout = layout;
     obj.nodeType = 8;
     obj.nodeName = node.nodeName; // '#comment'
@@ -214,24 +246,6 @@ window.STRouter = (function () {
 
 
 
-  // Замена router-view на DOM компонента
-  function setMountPlace(vnode) {
-    if (vnode.layout == 'DOM') {
-      const routeComponents = this.getRouteComponents;
-      const componentName = isEqualRoute(vnode, routeComponents);
-      if (componentName !== undefined) {
-        vnode.self = document.createDocumentFragment();
-        setDOM.call(this, this.components[componentName].vn, vnode.self);
-      }
-    } else if (vnode.layout == 'component') {
-      for (let i = 0; i < vnode.attributes.length; i++) {
-        if (vnode.attributes[i].name == 'name') {
-          vnode.self = document.createDocumentFragment();
-          setDOM.call(this, this.getComponent(vnode.attributes[i].value).vn, vnode.self); break;
-        }
-      }
-    }
-  }
 
   // создание элемента
   function createElement(vnode) {
@@ -242,7 +256,7 @@ window.STRouter = (function () {
     // условие для обычных элементов
     } else {
       if (vnode.nodeName == 'ROUTER-VIEW') {
-        setMountPlace.call(this, vnode); // вставка точки монтирования вместо тэга <router-view>
+        mount.call(this, vnode); // вставка точки монтирования вместо тэга <router-view>
       } else {
         vnode.self = document.createElement(vnode.nodeName);
         if (vnode.attributes !== null) vnode.attributes.forEach(a => vnode.self.setAttribute(a.name, a.value));
@@ -254,11 +268,13 @@ window.STRouter = (function () {
   }
   // создание текстового элемента
   function createText(vnode) {
-    return document.createTextNode(vnode.nodeValue);
+    vnode.self = document.createTextNode(vnode.nodeValue);
+    return vnode.self;
   }
   // создание комментария
   function createComment(vnode) {
-    return document.createComment(vnode.nodeValue);
+    vnode.self = document.createComment(vnode.nodeValue);
+    return vnode.self;
   }
   // рекурсивное создание DOM
   function setDOM(vnodeList, parent) {
@@ -273,11 +289,45 @@ window.STRouter = (function () {
     }
   }
 
+  // Замена router-view на DOM компонента
+  function mount(vnode) {
+    if (vnode.layout == 'DOM') {
+      const routeComponents = this.getRouteComponents;
+      const componentName = isEqualRoute(vnode, routeComponents);
+      if (componentName !== undefined) {
+        vnode.self = document.createDocumentFragment();
+        vnode.children = this.components[componentName].vn;
+        setDOM.call(this, vnode.children, vnode.self);
+      }
+    } else if (vnode.layout == 'component') {
+      vnode.self = document.createDocumentFragment();
+      vnode.children = this.getComponent(getComponentName(vnode)).vn;
+      setDOM.call(this, vnode.children, vnode.self);
+    }
+  }
+
+  // выгрузка нод неактуальных для текущего пути
+  function unmount() {
+    const unusedComponents = Object.keys(this.components).filter(name => !this.getRouteComponents.component.some(n => name === n));
+    unusedComponents.forEach(name => {
+      this.getComponent(name).vn.forEach(vnode => {
+        if ('self' in vnode) {
+          vnode.self.remove();
+          delete vnode.self;
+        }
+      });
+    });
+  }
 
 
 
 
-  const observer = new MutationObserver(o => console.log(o));
+
+  // Слежение за изменениями в DOM
+  function mutationObserving(o) {
+    console.log(o);
+  }
+  OBSERVER.observe(document.body, {childList: true, attributes: true, characterData: true, subtree: true, attributeOldValue: true, characterDataOldValue: true});
 
 
 
@@ -305,7 +355,6 @@ window.STRouter = (function () {
         });
       }
     }
-
   }
 
 
@@ -322,26 +371,24 @@ window.STRouter = (function () {
         titlePostfix: config && config.titlePostfix ? config.titlePostfix : ''
       };
 
+      setTitle(); // установка татйла при первой загрузке, далее устанавливается из _clickWatching
+
       if (isDevMode()) info('Вы находитесь в режиме разработки "development".');
 
       this.listeners  = Object.create(null);  // реестр слушателей
       this.components = Object.create(null);  // объект компонентов
       this.routes     = Object.create(null);  // пути
 
+      STRComponent.prototype.$router = this;
+
       isRouterViewTagExist(); // проверка на наличие тэга <router-view>
-      // hasRouterViewNameAttribute(); // проверка на наличие атрибута name у тэга <router-view>
 
       this.vn = getVNode(document.body.childNodes, 'DOM'); // виртуальный DOM
 
       collectComponentsFromRoute.call(this, routes); // сбор компонентов
 
-      // TODO: возможно перенести в render()
       document.body.innerHTML = ''; // очистка бодей
       setDOM.call(this, this.vn, document.body); // отрисовка из виртуального DOM
-
-      document.title = CONFIG.titlePrefix + document.title + CONFIG.titlePostfix; // установка тайтла страницы
-
-      this.render(); // рендеринг
 
       // системный слушатель нажатия по ссылкам
       this.addListener({
@@ -356,6 +403,8 @@ window.STRouter = (function () {
         listener: this.render.bind(this),
         name: '_routerHistoryWatcher'
       });
+
+      this.render(); // рендеринг
     }
 
     // Version
@@ -381,9 +430,7 @@ window.STRouter = (function () {
       title,
       url = '/'
     }) {
-      let newTitle = title ? CONFIG.titlePrefix + title + CONFIG.titlePostfix : document.title;
-      history.pushState(data, newTitle, url);
-      document.title = newTitle;
+      history.pushState(data, setTitle(title), url);
     }
 
     /**
@@ -399,8 +446,7 @@ window.STRouter = (function () {
           url,
           title
         };
-        // TODO: вместо повторного рендеринга следить за изменением дома
-        // this.render();
+        this.render();
       };
 
       let parent;
@@ -487,7 +533,7 @@ window.STRouter = (function () {
         });
         // если в реестре не зарегистрировано слушателей, то выходим
         if (Object.keys(this.listeners).length == 0) {
-          warn('Нет активных слушателей.');
+          if (isDevMode()) warn('Нет активных слушателей.');
           return;
         }
 
@@ -576,7 +622,7 @@ window.STRouter = (function () {
     get getRouteComponents() {
       let componentArr = [];
       const locationArr = this.location.path.split('/');
-      let component;
+      let stringRoute;
       // если в пути последний символ '/', то при сплите в массив добавляется пустая строка и тут она убирается
       // (locationArr.length > 2) нужно потому что массив для главной страницы будет ['',''] и если в нем обрезать последний элемент, то главная никогда не откроется
       if (locationArr.length > 2 && locationArr[locationArr.length - 1] == '') locationArr.pop();
@@ -591,26 +637,24 @@ window.STRouter = (function () {
             else if (str.indexOf(':') > -1) compareArr.push(1);
             else compareArr.push(0);
           });
-          if (!compareArr.some(num => num == 0)) component = route;
+          if (!compareArr.some(num => num == 0)) stringRoute = route;
         }
       });
-      if (component) return {[component]: this.routes[component]};
-      else if (this.routes['*']) return {'*': this.routes['*']};
-      else { if (isDevMode()) warn('Для этого пути не определен маршрут и нет маршрута по-умолчанию "*".'); return undefined; }
+      if (stringRoute) return {route: stringRoute, component: this.routes[stringRoute]};
+      else if (this.routes['*']) return {route: '*', component: this.routes['*']};
+      else {
+        if (isDevMode()) warn('Для этого пути не определен маршрут и нет маршрута по-умолчанию "*".');
+        return {route: this.location.path, component: undefined};
+      }
     }
 
     // Component rendering
     render() {
+      unmount.call(this);
+      // setDOM.call(this, this.vn, document.body); // отрисовка из виртуального DOM
 
-      // TODO: temporary
-      observer.observe(document.body, {childList: true, attributes: true, characterData: true, subtree: true, attributeOldValue: true, characterDataOldValue: true});
-      // const routeComponents = this.getRouteComponents();
-      // if (!routeComponents) return;
-      // // чистка
-      // this._clearMountPlace_();
-
-      // // удаление листнеров с предыдущих страниц
-      // this.removeListeners();
+      // удаление листнеров с предыдущих страниц
+      this.removeListeners();
 
       // // монтирование
       // this.componentNames.forEach(name => {
